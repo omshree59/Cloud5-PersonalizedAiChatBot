@@ -499,12 +499,14 @@ export default function Cloud5Chat() {
                   {msg.role === "ai" && (
                     <img src="/logo.png" alt="Cloud5 Logo" className="w-8 h-8 object-contain flex-shrink-0 mt-1 drop-shadow-md" />
                   )}
-                  
+
                   <div className={`px-6 py-4 max-w-[85%] rounded-3xl text-[15px] leading-relaxed shadow-sm ${
                     msg.role === "user" 
                       ? "bg-[#303133]/90 backdrop-blur-sm text-gray-100 rounded-br-sm border border-gray-700/50" 
-                      : "text-gray-100 rounded-bl-sm prose prose-invert prose-p:leading-relaxed prose-pre:bg-[#1e1f20] prose-pre:border prose-pre:border-gray-700/50 prose-a:text-blue-400 max-w-none"
+                      : "bg-[#1e1f20]/80 backdrop-blur-md border border-gray-700/50 text-gray-100 rounded-bl-sm prose prose-invert prose-p:leading-relaxed prose-pre:bg-[#1e1f20] prose-pre:border prose-pre:border-gray-700/50 prose-a:text-blue-400 max-w-none"
                   }`}>
+                  
+
                     {msg.role === "user" ? (
                       <div className="flex flex-col gap-3">
                          {msg.userImage && <img src={msg.userImage} alt="Uploaded" className="max-w-xs rounded-xl border border-gray-600 shadow-md" />}
