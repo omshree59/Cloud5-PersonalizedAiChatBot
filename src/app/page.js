@@ -1,13 +1,67 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Menu, Plus, Mic, Image as ImageIcon, Compass, Lightbulb, Code, Loader2, MessageSquare, LogOut, Users, X, BrainCircuit } from "lucide-react";
+// ADDED Check and Copy icons for our new clipboard button
+import { Send, Menu, Plus, Mic, Image as ImageIcon, Compass, Lightbulb, Code as CodeIcon, Loader2, MessageSquare, LogOut, Users, X, BrainCircuit, Check, Copy } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+
+// --- NEW: SYNTAX HIGHLIGHTING IMPORTS ---
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { auth, db } from "../firebase"; 
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
 import { collection, doc, getDocs, getDoc, setDoc, updateDoc, arrayUnion, query, orderBy } from "firebase/firestore";
+
+// --- NEW: PRO-LEVEL CODE BLOCK COMPONENT ---
+// This handles syntax coloring and the "Copy to Clipboard" button
+const CodeBlock = ({ inline, className, children, ...props }) => {
+  const [copied, setCopied] = useState(false);
+  const match = /language-(\w+)/.exec(className || '');
+  const codeString = String(children).replace(/\n$/, '');
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(codeString);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (!inline && match) {
+    return (
+      <div className="relative group rounded-xl overflow-hidden my-5 border border-gray-700 shadow-xl bg-[#1e1e1e]">
+        <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-gray-700">
+          <span className="text-xs text-gray-400 font-mono uppercase tracking-wider">{match[1]}</span>
+          <button
+            onClick={handleCopy}
+            className="p-1.5 bg-transparent hover:bg-white/10 rounded-md transition-colors text-gray-400 hover:text-gray-200 flex items-center gap-1"
+            title="Copy code"
+          >
+            {copied ? (
+               <><Check size={14} className="text-green-400" /><span className="text-xs text-green-400">Copied</span></>
+            ) : (
+               <><Copy size={14} /><span className="text-xs">Copy</span></>
+            )}
+          </button>
+        </div>
+        <SyntaxHighlighter
+          {...props}
+          style={vscDarkPlus}
+          language={match[1]}
+          PreTag="div"
+          customStyle={{ margin: 0, padding: '1.25rem', background: 'transparent', fontSize: '0.9rem' }}
+        >
+          {codeString}
+        </SyntaxHighlighter>
+      </div>
+    );
+  }
+  return (
+    <code {...props} className={`${className} bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded-md text-sm font-mono`}>
+      {children}
+    </code>
+  );
+};
 
 export default function Cloud5Chat() {
   const [messages, setMessages] = useState([]); 
@@ -34,7 +88,6 @@ export default function Cloud5Chat() {
 
   const messagesEndRef = useRef(null);
 
-  // --- NEW: Load guest count from Local Storage on mount ---
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedCount = localStorage.getItem("cloud5_guest_count");
@@ -79,18 +132,12 @@ export default function Cloud5Chat() {
           setMessages([]); setCurrentChatId(null);
         }
       } else {
-        setMessages([]); 
-        setChatsList([]); 
-        setCurrentChatId(null); 
-        
-        // --- FIXED: Read from local storage instead of resetting to 0 on logout ---
+        setMessages([]); setChatsList([]); setCurrentChatId(null);
         if (typeof window !== "undefined") {
             const storedCount = localStorage.getItem("cloud5_guest_count");
             setMessageCount(storedCount ? parseInt(storedCount, 10) : 0);
         }
-        
-        setLastImageDate(null); 
-        setVisionStats({ date: null, count: 0 });
+        setLastImageDate(null); setVisionStats({ date: null, count: 0 });
       }
     });
     return () => unsubscribe();
@@ -156,7 +203,6 @@ export default function Cloud5Chat() {
     const capturedImage = selectedImage; 
     setInput(""); setSelectedImage(null); setIsLoading(true);
     
-    // --- FIXED: Save the incremented count securely to Local Storage ---
     if (!user) {
         setMessageCount(prev => {
             const newCount = prev + 1;
@@ -310,7 +356,7 @@ export default function Cloud5Chat() {
     { icon: <ImageIcon size={18} />, text: "Create image" },
     { icon: <Compass size={18} />, text: "Explore ideas" },
     { icon: <Lightbulb size={18} />, text: "Get inspired" },
-    { icon: <Code size={18} />, text: "Help me code" },
+    { icon: <CodeIcon size={18} />, text: "Help me code" },
   ];
 
   return (
@@ -528,7 +574,7 @@ export default function Cloud5Chat() {
                   <div className={`px-6 py-4 max-w-[85%] rounded-3xl text-[15px] leading-relaxed shadow-sm ${
                     msg.role === "user" 
                       ? "bg-[#303133]/90 backdrop-blur-sm text-gray-100 rounded-br-sm border border-gray-700/50" 
-                      : "bg-[#1e1f20]/80 backdrop-blur-md border border-gray-700/50 text-gray-100 rounded-bl-sm prose prose-invert prose-p:leading-relaxed prose-pre:bg-[#1e1f20] prose-pre:border prose-pre:border-gray-700/50 prose-a:text-blue-400 max-w-none"
+                      : "bg-[#1e1f20]/80 backdrop-blur-md border border-gray-700/50 text-gray-100 rounded-bl-sm prose prose-invert prose-p:leading-relaxed prose-pre:bg-transparent prose-pre:border-none prose-pre:p-0 prose-a:text-blue-400 max-w-none"
                   }`}>
                   
                     {msg.role === "user" ? (
@@ -538,9 +584,14 @@ export default function Cloud5Chat() {
                       </div>
                     ) : (
                       <>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {/* --- NEW: THE SYNTAX HIGHLIGHTER IN ACTION --- */}
+                        <ReactMarkdown 
+                           remarkPlugins={[remarkGfm]}
+                           components={{ code: CodeBlock }}
+                        >
                           {msg.content}
                         </ReactMarkdown>
+
                         {msg.image && (
                            <img src={msg.image} alt="AI Generated" className="mt-4 rounded-xl shadow-lg border border-gray-700/50 w-full max-w-sm" />
                         )}
@@ -550,11 +601,14 @@ export default function Cloud5Chat() {
                 </div>
               ))}
               
+              {/* --- NEW: ANIMATED TYPING INDICATOR --- */}
               {isLoading && (
                 <div className="flex gap-4 justify-start">
                    <img src="/logo.png" alt="Cloud5 Logo" className="w-8 h-8 object-contain flex-shrink-0 mt-1 drop-shadow-md" />
-                  <div className="px-6 py-4 flex items-center gap-3">
-                    <Loader2 className="animate-spin text-gray-400" size={22} />
+                  <div className="px-6 py-5 flex items-center gap-1.5 bg-[#1e1f20]/80 backdrop-blur-md border border-gray-700/50 rounded-3xl rounded-bl-sm shadow-sm h-[48px]">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-red-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                   </div>
                 </div>
               )}
