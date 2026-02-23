@@ -27,13 +27,22 @@ export default function Cloud5Chat() {
   const [lastImageDate, setLastImageDate] = useState(null);
   const [visionStats, setVisionStats] = useState({ date: null, count: 0 });
 
-  // --- NEW: PERSONA STATE ---
   const [activePersona, setActivePersona] = useState("default");
 
   const [selectedImage, setSelectedImage] = useState(null);
   const fileInputRef = useRef(null);
 
   const messagesEndRef = useRef(null);
+
+  // --- NEW: Load guest count from Local Storage on mount ---
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedCount = localStorage.getItem("cloud5_guest_count");
+      if (storedCount) {
+        setMessageCount(parseInt(storedCount, 10));
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -70,7 +79,18 @@ export default function Cloud5Chat() {
           setMessages([]); setCurrentChatId(null);
         }
       } else {
-        setMessages([]); setChatsList([]); setCurrentChatId(null); setMessageCount(0); setLastImageDate(null); setVisionStats({ date: null, count: 0 });
+        setMessages([]); 
+        setChatsList([]); 
+        setCurrentChatId(null); 
+        
+        // --- FIXED: Read from local storage instead of resetting to 0 on logout ---
+        if (typeof window !== "undefined") {
+            const storedCount = localStorage.getItem("cloud5_guest_count");
+            setMessageCount(storedCount ? parseInt(storedCount, 10) : 0);
+        }
+        
+        setLastImageDate(null); 
+        setVisionStats({ date: null, count: 0 });
       }
     });
     return () => unsubscribe();
@@ -101,7 +121,6 @@ export default function Cloud5Chat() {
 
   const handleNewChat = () => {
     setMessages([]); setCurrentChatId(null); setIsSidebarOpen(false); setSelectedImage(null);
-    if (!user) setMessageCount(0);
   };
 
   const selectChat = (chatId) => {
@@ -136,7 +155,15 @@ export default function Cloud5Chat() {
     
     const capturedImage = selectedImage; 
     setInput(""); setSelectedImage(null); setIsLoading(true);
-    if (!user) setMessageCount(prev => prev + 1);
+    
+    // --- FIXED: Save the incremented count securely to Local Storage ---
+    if (!user) {
+        setMessageCount(prev => {
+            const newCount = prev + 1;
+            localStorage.setItem("cloud5_guest_count", newCount.toString());
+            return newCount;
+        });
+    }
 
     if (user) {
       const chatRef = doc(db, "users", user.uid, "chats", chatIdToUse);
@@ -251,14 +278,14 @@ export default function Cloud5Chat() {
         return; 
     }
 
-    // --- STANDARD TEXT CHAT (NOW INCLUDES PERSONA) ---
+    // --- STANDARD TEXT CHAT ---
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
             message: textToSend, 
-            persona: activePersona // <-- Sending the selected persona to your backend!
+            persona: activePersona
         }),
       });
       const data = await response.json();
@@ -353,7 +380,6 @@ export default function Cloud5Chat() {
           
           <div className="flex items-center gap-4">
             
-            {/* --- NEW: PERSONA DROPDOWN SELECTOR --- */}
             <div className="relative flex items-center bg-[#1e1f20]/80 backdrop-blur-md border border-gray-700/50 rounded-full px-3 py-1.5 shadow-sm">
                 <BrainCircuit size={16} className="text-gray-400 mr-2" />
                 <select 
@@ -370,7 +396,6 @@ export default function Cloud5Chat() {
                     <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                 </div>
             </div>
-
 
             {!user ? (
               <button onClick={() => handleGoogleLogin(false)} className="bg-[#c2e7ff] hover:bg-[#a8d6f5] text-[#001d35] px-5 py-2 rounded-full text-sm font-semibold transition-all shadow-sm">
@@ -506,7 +531,6 @@ export default function Cloud5Chat() {
                       : "bg-[#1e1f20]/80 backdrop-blur-md border border-gray-700/50 text-gray-100 rounded-bl-sm prose prose-invert prose-p:leading-relaxed prose-pre:bg-[#1e1f20] prose-pre:border prose-pre:border-gray-700/50 prose-a:text-blue-400 max-w-none"
                   }`}>
                   
-
                     {msg.role === "user" ? (
                       <div className="flex flex-col gap-3">
                          {msg.userImage && <img src={msg.userImage} alt="Uploaded" className="max-w-xs rounded-xl border border-gray-600 shadow-md" />}
