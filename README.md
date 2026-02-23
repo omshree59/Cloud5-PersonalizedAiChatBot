@@ -1,6 +1,6 @@
 # ☁️ Cloud5 AI
 **A High-Availability, Multi-Modal AI Assistant Built with Next.js**
-Use in - https://cloud5-personalized-ai-chat-bot.vercel.app/
+Use in - https://cloud5bot.vercel.app/
 
 Cloud5 is a cutting-edge, highly resilient web application that seamlessly blends text generation, image creation, and visual question answering (VQA). Engineered with enterprise-grade "Fallback Cascades," Cloud5 guarantees near 100% uptime by dynamically routing requests across 5 different state-of-the-art AI models.
 
