@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+body {
+  background-color: #131314; 
+  color: #e3e3e3;
+}
