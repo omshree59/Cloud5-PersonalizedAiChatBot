@@ -353,7 +353,7 @@ const capturedImage = selectedImage;
     }
 
     // --- IMAGE GENERATION INTERCEPTOR ---
-    const isImageGenRequest = /^(generate|create|make|draw|paint)\s+(an\s+|a\s+)?(image|picture|pic|photo|drawing|art)/i.test(textToSend);
+    const isImageGenRequest = /(generate|geneate|create|make|draw|paint)\s+(an\s+|a\s+)?(ai\s+)?(image|picture|pic|photo|drawing|art)/i.test(textToSend);
 
     if (isImageGenRequest) {
         if (!user) {
