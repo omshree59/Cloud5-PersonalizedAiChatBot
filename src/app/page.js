@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 // ADDED Check and Copy icons for our new clipboard button
-import { Send, Menu, Plus, Mic, Image as ImageIcon, Compass, Lightbulb, Code as CodeIcon, Loader2, MessageSquare, LogOut, Users, X, BrainCircuit, Check, Copy } from "lucide-react";
+import { Send, Menu, Plus, Mic, Image as ImageIcon, Compass, Lightbulb, Code as CodeIcon, Loader2, MessageSquare, LogOut, Users, X, BrainCircuit, Check, Copy,Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -12,7 +12,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { auth, db } from "../firebase"; 
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, arrayUnion, query, orderBy } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, arrayUnion, query, orderBy,deleteDoc } from "firebase/firestore";
 
 // --- NEW: PRO-LEVEL CODE BLOCK COMPONENT ---
 // This handles syntax coloring and the "Copy to Clipboard" button
@@ -87,6 +87,7 @@ export default function Cloud5Chat() {
   const fileInputRef = useRef(null);
 
   const messagesEndRef = useRef(null);
+  const [isListening, setIsListening] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -124,13 +125,12 @@ export default function Cloud5Chat() {
         const fetchedChats = [];
         querySnapshot.forEach((doc) => { fetchedChats.push({ id: doc.id, ...doc.data() }); });
         setChatsList(fetchedChats);
+
+        // --- NEW: ALWAYS start on a fresh screen ---
+        setMessages([]); 
+        setCurrentChatId(null);
         
-        if (fetchedChats.length > 0) {
-          setCurrentChatId(fetchedChats[0].id);
-          setMessages(fetchedChats[0].messages || []);
-        } else {
-          setMessages([]); setCurrentChatId(null);
-        }
+
       } else {
         setMessages([]); setChatsList([]); setCurrentChatId(null);
         if (typeof window !== "undefined") {
@@ -165,9 +165,74 @@ export default function Cloud5Chat() {
   const handleLogout = async () => {
     try { await signOut(auth); setIsUserMenuOpen(false); } catch (error) { console.error("Logout failed:", error); }
   };
-
   const handleNewChat = () => {
-    setMessages([]); setCurrentChatId(null); setIsSidebarOpen(false); setSelectedImage(null);
+    setMessages([]); 
+    setCurrentChatId(null); 
+    setIsSidebarOpen(false); 
+    setSelectedImage(null);
+  };
+
+  const handleDeleteChat = async (e, chatId) => {
+    e.stopPropagation(); // Prevents the chat from opening when you click the trash can
+    if (!user) return;
+    
+    try {
+      // 1. Delete it permanently from the Firestore database
+      await deleteDoc(doc(db, "users", user.uid, "chats", chatId));
+      
+      // 2. Remove it from the sidebar visually
+      const updatedChats = chatsList.filter(c => c.id !== chatId);
+      setChatsList(updatedChats);
+      
+      // 3. If you deleted the chat you are currently looking at, clear the screen
+      if (currentChatId === chatId) {
+        setCurrentChatId(null);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error("Error deleting chat:", error);
+    }
+  };
+
+  // --- NEW: VOICE RECOGNITION FUNCTION ---
+  const handleSpeechToText = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert("Your browser does not support speech recognition. Please try Google Chrome or Microsoft Edge!");
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+
+    recognition.continuous = false; // Stops listening automatically when you pause
+    recognition.interimResults = true; // Shows words as you are speaking them!
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      const currentTranscript = Array.from(event.results)
+        .map(result => result[0])
+        .map(result => result.transcript)
+        .join('');
+      
+      // Instantly type the words into the chat box!
+      setInput(currentTranscript);
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    // Start the microphone!
+    recognition.start();
   };
 
   const selectChat = (chatId) => {
@@ -324,14 +389,22 @@ export default function Cloud5Chat() {
         return; 
     }
 
-    // --- STANDARD TEXT CHAT ---
+    // --- STANDARD TEXT CHAT ----
     try {
+      // Create a preferences object (Later, you can fetch this from Firebase!)
+      const userContext = user ? {
+        nickname: user.displayName ? user.displayName.split(' ')[0] : "Boss",
+        codingStyle: "Prefers Python and C++ for algorithms, and React/Next.js for web dev.",
+        vibe: "Keep answers concise, highly technical, and professional."
+      } : null;
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
             message: textToSend, 
-            persona: activePersona
+            persona: activePersona,
+            preferences: userContext // <-- NEW: Sending the memory to the backend!
         }),
       });
       const data = await response.json();
@@ -395,15 +468,28 @@ export default function Cloud5Chat() {
             <p className="text-sm text-gray-500 px-2">Sign in to save your history.</p>
           ) : chatsList.length > 0 ? (
             <div className="space-y-1">
-              {chatsList.map((chat) => (
-                <button 
+{chatsList.map((chat) => (
+                <div 
                   key={chat.id}
-                  onClick={() => selectChat(chat.id)}
-                  className={`flex items-center gap-3 w-full px-3 py-3 rounded-xl transition-colors text-sm text-left truncate border ${currentChatId === chat.id ? 'bg-[#2a2b2e] border-white/10 text-gray-200' : 'bg-transparent border-transparent hover:bg-white/5 text-gray-400 hover:text-gray-300'}`}
+                  className={`group flex items-center justify-between w-full px-2 py-2 rounded-xl transition-colors border ${currentChatId === chat.id ? 'bg-[#2a2b2e] border-white/10' : 'bg-transparent border-transparent hover:bg-white/5'}`}
                 >
-                  <MessageSquare size={16} className="shrink-0" />
-                  <span className="truncate">{chat.title}</span>
-                </button>
+                  <button 
+                    onClick={() => selectChat(chat.id)}
+                    className={`flex items-center gap-3 flex-1 overflow-hidden text-left text-sm ${currentChatId === chat.id ? 'text-gray-200' : 'text-gray-400 group-hover:text-gray-300'}`}
+                  >
+                    <MessageSquare size={16} className="shrink-0 ml-1" />
+                    <span className="truncate pr-2">{chat.title}</span>
+                  </button>
+                  
+                  {/* --- NEW: The hidden Trash Can button --- */}
+                  <button 
+                    onClick={(e) => handleDeleteChat(e, chat.id)}
+                    className="p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-red-400/10 mr-1"
+                    title="Delete Chat"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
@@ -536,14 +622,19 @@ export default function Cloud5Chat() {
                         />
 
                         <div className="flex items-center gap-2">
-                          <button type="button" className="p-2 text-gray-400 hover:text-gray-200 hover:bg-white/10 rounded-full transition-colors">
-                            <Mic size={22} />
-                          </button>
-                          {(input.trim() || selectedImage) && (
-                            <button type="submit" disabled={isLoading} className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-colors">
-                              <Send size={18} />
-                            </button>
-                          )}
+{/* --- UPDATED: Home Screen Mic Button --- */}
+<button 
+  type="button" 
+  onClick={handleSpeechToText}
+  className={`p-2 rounded-full transition-all ${
+    isListening 
+      ? 'bg-red-500/20 text-red-500 animate-pulse' 
+      : 'text-gray-400 hover:text-gray-200 hover:bg-white/10'
+  }`}
+  title="Dictate message"
+>
+  <Mic size={22} />
+</button>
                         </div>
                       </div>
                     </form>
@@ -659,9 +750,19 @@ export default function Cloud5Chat() {
                       disabled={isLoading}
                       className="flex-1 bg-transparent border-none focus:ring-0 px-3 text-gray-200 placeholder-gray-500 text-lg outline-none"
                     />
-                    <button type="button" className="p-3 text-gray-400 hover:text-gray-200 hover:bg-white/10 rounded-full transition-colors">
-                      <Mic size={22} />
-                    </button>
+                    {/* --- UPDATED: Chat Input Mic Button --- */}
+<button 
+  type="button" 
+  onClick={handleSpeechToText}
+  className={`p-3 rounded-full transition-all ${
+    isListening 
+      ? 'bg-red-500/20 text-red-500 animate-pulse' 
+      : 'text-gray-400 hover:text-gray-200 hover:bg-white/10'
+  }`}
+  title="Dictate message"
+>
+  <Mic size={22} />
+</button>
                     {(input.trim() || selectedImage) && (
                       <button type="submit" disabled={isLoading} className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-colors ml-1 disabled:opacity-50">
                         <Send size={20} />

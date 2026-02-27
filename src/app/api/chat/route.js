@@ -3,23 +3,32 @@ import { NextResponse } from "next/server";
 
 export async function POST(req) {
   try {
-    // We now expect both the message AND the selected persona
-    const { message, persona } = await req.json();
+    // --- FIX 1: Extract 'preferences' from the JSON body ---
+    const { message, persona, preferences } = await req.json();
 
     const key = process.env.BYTEZ_API_KEY;
     const sdk = new Bytez(key);
 
-    // --- THE CUSTOM PERSONA INJECTOR ---
-    let systemPrompt = "";
+    // Initial base identity
+    let systemPrompt = "You are Cloud5, a highly intelligent and helpful AI assistant created by Omshree and Darshan. You provide clear, friendly, and factual answers to all questions.";
 
+    // --- THE CUSTOM PERSONA INJECTOR ---
+    // Change logic: Start with the base persona, then append user-specific memory if it exists
     if (persona === "mentor") {
         systemPrompt = "You are an expert Senior Software Engineer and coding mentor. Your student is building advanced full-stack apps with React, Next.js, and Java, and tackling Data Structures and Algorithms in C and C++. Do not just give away the final code. Instead, ask guiding questions, explain the underlying architecture, and encourage open-source best practices. Assume they are using modern tools like Cursor AI.";
     } else if (persona === "sustainability") {
         systemPrompt = "You are a leading expert in green tech, environmental sustainability, and smart waste management. You provide deep, actionable insights tailored for projects focused on real-world social impact, similar to CivicFix AI and EcoQuest. Emphasize gamified sustainability when brainstorming.";
     } else if (persona === "writer") {
         systemPrompt = "You are a master storyteller and creative scriptwriter. You craft highly engaging narratives with deep character arcs. Draw inspiration from the intricate plot twists of popular K-dramas and the immersive lore of games like Hogwarts Legacy or Modern Warfare 3. Feel free to weave strategic elements, like a high-stakes chess match or a poignant singing performance, into your scenes to make them dynamic.";
-    } else {
-        systemPrompt = "You are Cloud5, a highly intelligent and helpful AI assistant created by Omshree and Darshan. You provide clear, friendly, and factual answers to all questions.";
+    }
+
+    // --- FIX 2: Correctly append user preferences to the chosen persona ---
+    if (preferences) {
+      systemPrompt += `
+        Always address the user by their nickname: ${preferences.nickname}.
+        Coding Preferences: ${preferences.codingStyle}
+        Communication Style: ${preferences.vibe}
+      `;
     }
 
     // We inject the system prompt as the very first message
@@ -85,6 +94,7 @@ export async function POST(req) {
       }
     }
 
+    // --- Final Output Processing ---
     let textAnswer = finalOutput;
     if (typeof finalOutput === "string") {
         textAnswer = finalOutput;
