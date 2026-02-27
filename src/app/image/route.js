@@ -5,7 +5,17 @@ export async function POST(req) {
   try {
     const { prompt } = await req.json();
     
-const key = process.env.BYTEZ_API_KEY;
+    // 1. Securely fetch the key from your .env.local file
+    const key = process.env.BYTEZ_API_KEY;
+    
+    // Add a quick safety check to ensure the key actually loaded
+    if (!key) {
+      console.error("Missing BYTEZ_API_KEY in environment variables.");
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+    }
+
+    // 2. THE FIX: You MUST initialize the SDK before using it!
+    const bytez = new Bytez(key); 
     
     let finalOutput = null;
 
@@ -65,6 +75,6 @@ const key = process.env.BYTEZ_API_KEY;
     
   } catch (err) {
     console.error("Image API Error:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: "Server error processing the image." }, { status: 500 });
   }
 }

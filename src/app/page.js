@@ -265,26 +265,48 @@ export default function Cloud5Chat() {
     const userMsg = { role: "user", content: textToSend, userImage: selectedImage };
     setMessages((prev) => [...prev, userMsg]);
     
-    const capturedImage = selectedImage; 
+const capturedImage = selectedImage; 
     setInput(""); setSelectedImage(null); setIsLoading(true);
     
     if (!user) {
         setMessageCount(prev => {
-            const newCount = prev + 1;
-            localStorage.setItem("cloud5_guest_count", newCount.toString());
-            return newCount;
+            const nc = prev + 1;
+            localStorage.setItem("cloud5_guest_count", nc.toString());
+            return nc;
         });
     }
+
+    // --- NEW: UPLOAD USER IMAGE TO CLOUDINARY BEFORE SAVING TO DB ---
+    let dbImageUrl = null;
+    if (capturedImage && user) {
+        try {
+            const formData = new FormData();
+            formData.append("file", capturedImage);
+            formData.append("upload_preset", "cloud5"); 
+            // Upload the heavy Base64 string to Cloudinary
+            const cldRes = await fetch("https://api.cloudinary.com/v1_1/dswljz9rr/image/upload", { method: "POST", body: formData });
+            const cldData = await cldRes.json();
+            dbImageUrl = cldData.secure_url; // Grab the short, lightweight URL!
+        } catch (e) {
+            console.error("Cloudinary user upload failed:", e);
+        }
+    }
+
+    // --- Create a safe payload for Firebase that doesn't exceed 1MB ---
+    const dbUserMsg = { 
+        role: "user", 
+        content: textToSend, 
+        userImage: dbImageUrl // Using the tiny URL instead of the giant Base64 string
+    };
 
     if (user) {
       const chatRef = doc(db, "users", user.uid, "chats", chatIdToUse);
       if (isNewChat) {
-         const newChatData = { title: (textToSend || "Image Upload").substring(0, 25) + "...", messages: [userMsg], updatedAt: Date.now() };
-         await setDoc(chatRef, newChatData);
-         setChatsList(prev => [{ id: chatIdToUse, ...newChatData }, ...prev]);
+         const data = { title: (textToSend || "Image").substring(0, 25) + "...", messages: [dbUserMsg], updatedAt: Date.now() };
+         await setDoc(chatRef, data);
+         setChatsList(prev => [{ id: chatIdToUse, ...data }, ...prev]);
       } else {
-         await updateDoc(chatRef, { messages: arrayUnion(userMsg), updatedAt: Date.now() });
-         setChatsList(prev => prev.map(c => c.id === chatIdToUse ? {...c, messages: [...c.messages, userMsg], updatedAt: Date.now()} : c).sort((a,b) => b.updatedAt - a.updatedAt));
+         await updateDoc(chatRef, { messages: arrayUnion(dbUserMsg), updatedAt: Date.now() });
       }
     }
 
@@ -304,7 +326,7 @@ export default function Cloud5Chat() {
         }
 
         try {
-            const res = await fetch("/api/vision", {
+            const res = await fetch("/vision", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ question: textToSend, imageBase64: capturedImage })
@@ -346,7 +368,7 @@ export default function Cloud5Chat() {
         }
 
         try {
-           const response = await fetch("/api/image", { 
+           const response = await fetch("/image", { 
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ prompt: textToSend }),
@@ -730,45 +752,52 @@ export default function Cloud5Chat() {
                         </button>
                       </div>
                   )}
+<form onSubmit={(e) => sendMessage(e)} className="flex items-center">
+  <button type="button" onClick={() => fileInputRef.current.click()} className="p-3 text-gray-400 hover:text-gray-200 hover:bg-white/10 rounded-full transition-colors">
+    <Plus size={22} />
+  </button>
+  <input 
+    type="file" 
+    accept="image/*" 
+    ref={fileInputRef} 
+    onChange={handleFileSelect} 
+    className="hidden" 
+  />
+  <input
+    type="text"
+    value={input}
+    onChange={(e) => setInput(e.target.value)}
+    placeholder="Ask Cloud5..."
+    disabled={isLoading}
+    className="flex-1 bg-transparent border-none focus:ring-0 px-3 text-gray-200 placeholder-gray-500 text-lg outline-none"
+  />
+  
+  {/* --- UPDATED: The Microphone stays, Send icon appears next to it --- */}
+  <div className="flex items-center gap-1 mr-1">
+    <button 
+      type="button" 
+      onClick={handleSpeechToText}
+      className={`p-3 rounded-full transition-all ${
+        isListening 
+          ? 'bg-red-500/20 text-red-500 animate-pulse' 
+          : 'text-gray-400 hover:text-gray-200 hover:bg-white/10'
+      }`}
+      title="Dictate message"
+    >
+      <Mic size={22} />
+    </button>
 
-                  <form onSubmit={(e) => sendMessage(e)} className="flex items-center">
-                    <button type="button" onClick={() => fileInputRef.current.click()} className="p-3 text-gray-400 hover:text-gray-200 hover:bg-white/10 rounded-full transition-colors">
-                      <Plus size={22} />
-                    </button>
-                    <input 
-                        type="file" 
-                        accept="image/*" 
-                        ref={fileInputRef} 
-                        onChange={handleFileSelect} 
-                        className="hidden" 
-                    />
-                    <input
-                      type="text"
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      placeholder="Ask Cloud5..."
-                      disabled={isLoading}
-                      className="flex-1 bg-transparent border-none focus:ring-0 px-3 text-gray-200 placeholder-gray-500 text-lg outline-none"
-                    />
-                    {/* --- UPDATED: Chat Input Mic Button --- */}
-<button 
-  type="button" 
-  onClick={handleSpeechToText}
-  className={`p-3 rounded-full transition-all ${
-    isListening 
-      ? 'bg-red-500/20 text-red-500 animate-pulse' 
-      : 'text-gray-400 hover:text-gray-200 hover:bg-white/10'
-  }`}
-  title="Dictate message"
->
-  <Mic size={22} />
-</button>
-                    {(input.trim() || selectedImage) && (
-                      <button type="submit" disabled={isLoading} className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-colors ml-1 disabled:opacity-50">
-                        <Send size={20} />
-                      </button>
-                    )}
-                  </form>
+    {(input.trim() || selectedImage) && (
+      <button 
+        type="submit" 
+        disabled={isLoading} 
+        className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-all scale-110 animate-in zoom-in"
+      >
+        {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+      </button>
+    )}
+  </div>
+</form>
                 </div>
               )}
               <div className="text-center mt-3 text-xs text-gray-400 font-medium drop-shadow-md">
