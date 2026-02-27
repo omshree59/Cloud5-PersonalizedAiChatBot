@@ -1,21 +1,17 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-// ADDED Check and Copy icons for our new clipboard button
-import { Send, Menu, Plus, Mic, Image as ImageIcon, Compass, Lightbulb, Code as CodeIcon, Loader2, MessageSquare, LogOut, Users, X, BrainCircuit, Check, Copy,Trash2 } from "lucide-react";
+import { Send, Menu, Plus, Mic, Image as ImageIcon, Compass, Lightbulb, Code as CodeIcon, Loader2, MessageSquare, LogOut, Users, X, BrainCircuit, Check, Copy, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-// --- NEW: SYNTAX HIGHLIGHTING IMPORTS ---
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { auth, db } from "../firebase"; 
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, arrayUnion, query, orderBy,deleteDoc } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, arrayUnion, query, orderBy, deleteDoc } from "firebase/firestore";
 
-// --- NEW: PRO-LEVEL CODE BLOCK COMPONENT ---
-// This handles syntax coloring and the "Copy to Clipboard" button
 const CodeBlock = ({ inline, className, children, ...props }) => {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || '');
@@ -126,10 +122,8 @@ export default function Cloud5Chat() {
         querySnapshot.forEach((doc) => { fetchedChats.push({ id: doc.id, ...doc.data() }); });
         setChatsList(fetchedChats);
 
-        // --- NEW: ALWAYS start on a fresh screen ---
         setMessages([]); 
         setCurrentChatId(null);
-        
 
       } else {
         setMessages([]); setChatsList([]); setCurrentChatId(null);
@@ -165,6 +159,7 @@ export default function Cloud5Chat() {
   const handleLogout = async () => {
     try { await signOut(auth); setIsUserMenuOpen(false); } catch (error) { console.error("Logout failed:", error); }
   };
+  
   const handleNewChat = () => {
     setMessages([]); 
     setCurrentChatId(null); 
@@ -173,18 +168,13 @@ export default function Cloud5Chat() {
   };
 
   const handleDeleteChat = async (e, chatId) => {
-    e.stopPropagation(); // Prevents the chat from opening when you click the trash can
+    e.stopPropagation(); 
     if (!user) return;
     
     try {
-      // 1. Delete it permanently from the Firestore database
       await deleteDoc(doc(db, "users", user.uid, "chats", chatId));
-      
-      // 2. Remove it from the sidebar visually
       const updatedChats = chatsList.filter(c => c.id !== chatId);
       setChatsList(updatedChats);
-      
-      // 3. If you deleted the chat you are currently looking at, clear the screen
       if (currentChatId === chatId) {
         setCurrentChatId(null);
         setMessages([]);
@@ -194,7 +184,6 @@ export default function Cloud5Chat() {
     }
   };
 
-  // --- NEW: VOICE RECOGNITION FUNCTION ---
   const handleSpeechToText = () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       alert("Your browser does not support speech recognition. Please try Google Chrome or Microsoft Edge!");
@@ -204,21 +193,17 @@ export default function Cloud5Chat() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
 
-    recognition.continuous = false; // Stops listening automatically when you pause
-    recognition.interimResults = true; // Shows words as you are speaking them!
+    recognition.continuous = false; 
+    recognition.interimResults = true; 
     recognition.lang = 'en-US';
 
-    recognition.onstart = () => {
-      setIsListening(true);
-    };
+    recognition.onstart = () => { setIsListening(true); };
 
     recognition.onresult = (event) => {
       const currentTranscript = Array.from(event.results)
         .map(result => result[0])
         .map(result => result.transcript)
         .join('');
-      
-      // Instantly type the words into the chat box!
       setInput(currentTranscript);
     };
 
@@ -227,11 +212,7 @@ export default function Cloud5Chat() {
       setIsListening(false);
     };
 
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    // Start the microphone!
+    recognition.onend = () => { setIsListening(false); };
     recognition.start();
   };
 
@@ -265,7 +246,7 @@ export default function Cloud5Chat() {
     const userMsg = { role: "user", content: textToSend, userImage: selectedImage };
     setMessages((prev) => [...prev, userMsg]);
     
-const capturedImage = selectedImage; 
+    const capturedImage = selectedImage; 
     setInput(""); setSelectedImage(null); setIsLoading(true);
     
     if (!user) {
@@ -276,27 +257,24 @@ const capturedImage = selectedImage;
         });
     }
 
-    // --- NEW: UPLOAD USER IMAGE TO CLOUDINARY BEFORE SAVING TO DB ---
     let dbImageUrl = null;
     if (capturedImage && user) {
         try {
             const formData = new FormData();
             formData.append("file", capturedImage);
             formData.append("upload_preset", "cloud5"); 
-            // Upload the heavy Base64 string to Cloudinary
             const cldRes = await fetch("https://api.cloudinary.com/v1_1/dswljz9rr/image/upload", { method: "POST", body: formData });
             const cldData = await cldRes.json();
-            dbImageUrl = cldData.secure_url; // Grab the short, lightweight URL!
+            dbImageUrl = cldData.secure_url; 
         } catch (e) {
             console.error("Cloudinary user upload failed:", e);
         }
     }
 
-    // --- Create a safe payload for Firebase that doesn't exceed 1MB ---
     const dbUserMsg = { 
         role: "user", 
         content: textToSend, 
-        userImage: dbImageUrl // Using the tiny URL instead of the giant Base64 string
+        userImage: dbImageUrl 
     };
 
     if (user) {
@@ -352,8 +330,11 @@ const capturedImage = selectedImage;
         return; 
     }
 
-    // --- IMAGE GENERATION INTERCEPTOR ---
-    const isImageGenRequest = /(generate|geneate|create|make|draw|paint)\s+(an\s+|a\s+)?(ai\s+)?(image|picture|pic|photo|drawing|art)/i.test(textToSend);
+    // --- BULLETPROOF IMAGE GENERATION INTERCEPTOR ---
+    // If the prompt contains BOTH an action word AND an image word anywhere in the sentence, it triggers.
+    const hasActionWord = /(generate|geneate|create|make|draw|paint)/i.test(textToSend);
+    const hasImageWord = /(image|picture|pic|photo|drawing|art)/i.test(textToSend);
+    const isImageGenRequest = hasActionWord && hasImageWord;
 
     if (isImageGenRequest) {
         if (!user) {
@@ -385,7 +366,6 @@ const capturedImage = selectedImage;
 
            const formData = new FormData();
            formData.append("file", imageSrc);
-           
            formData.append("upload_preset", "cloud5"); 
            const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dswljz9rr/image/upload"; 
 
@@ -413,7 +393,6 @@ const capturedImage = selectedImage;
 
     // --- STANDARD TEXT CHAT ----
     try {
-      // Create a preferences object (Later, you can fetch this from Firebase!)
       const userContext = user ? {
         nickname: user.displayName ? user.displayName.split(' ')[0] : "Boss",
         codingStyle: "Prefers Python and C++ for algorithms, and React/Next.js for web dev.",
@@ -426,7 +405,7 @@ const capturedImage = selectedImage;
         body: JSON.stringify({ 
             message: textToSend, 
             persona: activePersona,
-            preferences: userContext // <-- NEW: Sending the memory to the backend!
+            preferences: userContext 
         }),
       });
       const data = await response.json();
@@ -490,7 +469,7 @@ const capturedImage = selectedImage;
             <p className="text-sm text-gray-500 px-2">Sign in to save your history.</p>
           ) : chatsList.length > 0 ? (
             <div className="space-y-1">
-{chatsList.map((chat) => (
+              {chatsList.map((chat) => (
                 <div 
                   key={chat.id}
                   className={`group flex items-center justify-between w-full px-2 py-2 rounded-xl transition-colors border ${currentChatId === chat.id ? 'bg-[#2a2b2e] border-white/10' : 'bg-transparent border-transparent hover:bg-white/5'}`}
@@ -503,7 +482,6 @@ const capturedImage = selectedImage;
                     <span className="truncate pr-2">{chat.title}</span>
                   </button>
                   
-                  {/* --- NEW: The hidden Trash Can button --- */}
                   <button 
                     onClick={(e) => handleDeleteChat(e, chat.id)}
                     className="p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-red-400/10 mr-1"
@@ -644,19 +622,28 @@ const capturedImage = selectedImage;
                         />
 
                         <div className="flex items-center gap-2">
-{/* --- UPDATED: Home Screen Mic Button --- */}
-<button 
-  type="button" 
-  onClick={handleSpeechToText}
-  className={`p-2 rounded-full transition-all ${
-    isListening 
-      ? 'bg-red-500/20 text-red-500 animate-pulse' 
-      : 'text-gray-400 hover:text-gray-200 hover:bg-white/10'
-  }`}
-  title="Dictate message"
->
-  <Mic size={22} />
-</button>
+                          <button 
+                            type="button" 
+                            onClick={handleSpeechToText}
+                            className={`p-2 rounded-full transition-all ${
+                              isListening 
+                                ? 'bg-red-500/20 text-red-500 animate-pulse' 
+                                : 'text-gray-400 hover:text-gray-200 hover:bg-white/10'
+                            }`}
+                            title="Dictate message"
+                          >
+                            <Mic size={22} />
+                          </button>
+
+                          {(input.trim() || selectedImage) && (
+                            <button 
+                              type="submit" 
+                              disabled={isLoading} 
+                              className="p-2 bg-blue-600 text-white rounded-full transition-all scale-110 animate-in zoom-in"
+                            >
+                              {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </form>
@@ -697,7 +684,6 @@ const capturedImage = selectedImage;
                       </div>
                     ) : (
                       <>
-                        {/* --- NEW: THE SYNTAX HIGHLIGHTER IN ACTION --- */}
                         <ReactMarkdown 
                            remarkPlugins={[remarkGfm]}
                            components={{ code: CodeBlock }}
@@ -714,7 +700,6 @@ const capturedImage = selectedImage;
                 </div>
               ))}
               
-              {/* --- NEW: ANIMATED TYPING INDICATOR --- */}
               {isLoading && (
                 <div className="flex gap-4 justify-start">
                    <img src="/logo.png" alt="Cloud5 Logo" className="w-8 h-8 object-contain flex-shrink-0 mt-1 drop-shadow-md" />
@@ -752,52 +737,51 @@ const capturedImage = selectedImage;
                         </button>
                       </div>
                   )}
-<form onSubmit={(e) => sendMessage(e)} className="flex items-center">
-  <button type="button" onClick={() => fileInputRef.current.click()} className="p-3 text-gray-400 hover:text-gray-200 hover:bg-white/10 rounded-full transition-colors">
-    <Plus size={22} />
-  </button>
-  <input 
-    type="file" 
-    accept="image/*" 
-    ref={fileInputRef} 
-    onChange={handleFileSelect} 
-    className="hidden" 
-  />
-  <input
-    type="text"
-    value={input}
-    onChange={(e) => setInput(e.target.value)}
-    placeholder="Ask Cloud5..."
-    disabled={isLoading}
-    className="flex-1 bg-transparent border-none focus:ring-0 px-3 text-gray-200 placeholder-gray-500 text-lg outline-none"
-  />
-  
-  {/* --- UPDATED: The Microphone stays, Send icon appears next to it --- */}
-  <div className="flex items-center gap-1 mr-1">
-    <button 
-      type="button" 
-      onClick={handleSpeechToText}
-      className={`p-3 rounded-full transition-all ${
-        isListening 
-          ? 'bg-red-500/20 text-red-500 animate-pulse' 
-          : 'text-gray-400 hover:text-gray-200 hover:bg-white/10'
-      }`}
-      title="Dictate message"
-    >
-      <Mic size={22} />
-    </button>
+                  <form onSubmit={(e) => sendMessage(e)} className="flex items-center">
+                    <button type="button" onClick={() => fileInputRef.current.click()} className="p-3 text-gray-400 hover:text-gray-200 hover:bg-white/10 rounded-full transition-colors">
+                      <Plus size={22} />
+                    </button>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      ref={fileInputRef} 
+                      onChange={handleFileSelect} 
+                      className="hidden" 
+                    />
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Ask Cloud5..."
+                      disabled={isLoading}
+                      className="flex-1 bg-transparent border-none focus:ring-0 px-3 text-gray-200 placeholder-gray-500 text-lg outline-none"
+                    />
+                    
+                    <div className="flex items-center gap-1 mr-1">
+                      <button 
+                        type="button" 
+                        onClick={handleSpeechToText}
+                        className={`p-3 rounded-full transition-all ${
+                          isListening 
+                            ? 'bg-red-500/20 text-red-500 animate-pulse' 
+                            : 'text-gray-400 hover:text-gray-200 hover:bg-white/10'
+                        }`}
+                        title="Dictate message"
+                      >
+                        <Mic size={22} />
+                      </button>
 
-    {(input.trim() || selectedImage) && (
-      <button 
-        type="submit" 
-        disabled={isLoading} 
-        className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-all scale-110 animate-in zoom-in"
-      >
-        {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-      </button>
-    )}
-  </div>
-</form>
+                      {(input.trim() || selectedImage) && (
+                        <button 
+                          type="submit" 
+                          disabled={isLoading} 
+                          className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-all scale-110 animate-in zoom-in"
+                        >
+                          {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                        </button>
+                      )}
+                    </div>
+                  </form>
                 </div>
               )}
               <div className="text-center mt-3 text-xs text-gray-400 font-medium drop-shadow-md">
